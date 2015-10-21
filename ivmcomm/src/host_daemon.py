@@ -85,7 +85,7 @@ def closeShm(shmid, vm_id, pid):
 
             del occupied_block.vmproc_info_list[(vm_id, pid)]
             # If the requester is a writer
-            if occupied_block.rw_perms == 'w':
+            if blockVmInfo.rw_perms == 'w':
                 occupied_block.wr_count = occupied_block.wr_count - 1
                 if occupied_block.wr_exc:
                     occupied_block.wr_exc = False
