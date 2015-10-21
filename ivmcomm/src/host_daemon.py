@@ -77,7 +77,7 @@ def openShm(shmid, vm_id, pid, rw_perms, wr_exc):
 
 # returns an error code
 def closeShm(shmid, vm_id, pid):
-    if shmid in occupied_block:
+    if shmid in occupied_blocks:
         occupied_block = occupied_blocks[shmid]
         # check if requester opened the shmid
         if (vm_id, pid) in occupied_block.vmproc_info_list:
