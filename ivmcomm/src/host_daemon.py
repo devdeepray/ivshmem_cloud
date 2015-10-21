@@ -18,6 +18,7 @@ SHM_PATH = config['DEFAULT']['shm_path']
 # Initialise th server data structures
 num_blocks = math.floor(TOT_SIZE / BLOCK_SIZE)
 free_blocks = list(range(num_blocks))
+# A dictionary of ShmBlockInfos for each occupied block indexed by shmid
 occupied_blocks = {}
 
 
@@ -41,6 +42,8 @@ class ShmBlockVMInfo:
         self.pid = pid
         self.rw_perms = rw_perms
         self.wr_exc = wr_exc
+
+# TODO: Serialize these functions. I believe SimpleXMLRPCServer is already sequential by default
 
 # returns err_code, start_address, size in bytes
 def openShm(shmid, vm_id, pid, rw_perms, wr_exc):
@@ -71,6 +74,33 @@ def openShm(shmid, vm_id, pid, rw_perms, wr_exc):
     addr = BLOCK_SIZE * free_block;
     return (0, addr, BLOCK_SIZE)
 
+
+# returns an error code
+def closeShm(shmid, vm_id, pid):
+    if shmid in occupied_block:
+        occupied_block = occupied_blocks[shmid]
+        # check if requester opened the shmid
+        if (vm_id, pid) in occupied_block.vmproc_info_list:
+            blockVmInfo = occupied_block.vmproc_info_list[(vm_id, pid)]
+
+            del occupied_block.vmproc_info_list[(vm_id, pid)]
+            # If the requester is a writer
+            if occupied_block.rw_perms == 'w':
+                del occupied_block.vmproc_info_list[(vm_id, pid)]
+                occupied_block.wr_count = occupied_block.wr_count - 1
+                if occupied_block.wr_exc:
+                    occupied_block.wr_exc = False
+
+            # If ref_count == 0, delete the shared block
+            if occupied_block.wr_count == 0 and len(occupied_block.vmproc_info_list) == 0:
+                free_blocks.append(occupied_block.block_no)
+                del occupied_blocks[shmid]
+            return 0
+
+    # If not open, return error
+    return errno.EPERM
+
+
 # Restrict to a particular path.
 class RequestHandler(SimpleXMLRPCRequestHandler):
     rpc_paths = ('/RPC2',)
@@ -80,9 +110,9 @@ server = SimpleXMLRPCServer(("localhost", PORT),
                             requestHandler=RequestHandler)
 server.register_introspection_functions()
 
-# Register pow() function; this will use the value of
-# pow.__name__ as the name, which is just 'pow'.
+# Register RPC functions
 server.register_function(openShm, "openShm")
+server.register_function(closeShm, "closeShm")
 
 # Run the server's main loop
 server.serve_forever()
