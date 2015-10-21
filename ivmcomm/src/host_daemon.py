@@ -86,13 +86,12 @@ def closeShm(shmid, vm_id, pid):
             del occupied_block.vmproc_info_list[(vm_id, pid)]
             # If the requester is a writer
             if occupied_block.rw_perms == 'w':
-                del occupied_block.vmproc_info_list[(vm_id, pid)]
                 occupied_block.wr_count = occupied_block.wr_count - 1
                 if occupied_block.wr_exc:
                     occupied_block.wr_exc = False
 
             # If ref_count == 0, delete the shared block
-            if occupied_block.wr_count == 0 and len(occupied_block.vmproc_info_list) == 0:
+            if len(occupied_block.vmproc_info_list) == 0:
                 free_blocks.append(occupied_block.block_no)
                 del occupied_blocks[shmid]
             return 0
