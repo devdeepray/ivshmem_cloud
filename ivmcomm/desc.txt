@@ -1,0 +1,62 @@
+L1
+Daemon API
+1) open(int shmid, char** baseptr, int* size, int flags, int perms)
+	1) Inform the daemon that we want to 'open' a shared memory region and wit for a reply from the daemon.
+	2) Daemon replies back with the offset in the shared memory region and its size.
+	3) mmap this to get the baseptr and return it along with the size.
+	4) flags:
+		1) exclusive
+		2) multishared
+	5) perms:
+		read, write, read/write
+		
+
+3) close(int shmid, char* baseptr, int size)
+	1) Open a connection with the daemon informing it of the desire to close the connection.
+	2) un-mmap the region
+
+
+Client Daemon:
+1) Listen for requests to open and close conections
+	1) open(int shmid, char** baseptr, int* size, int flags, int perms)
+		1) Daemon communicates with the host passing it the arguments.
+		2) Host replies back with the offset and size which the daemon returns back to the process.
+
+	2) close(int shmid, char* baseptr, int size)
+		1) Pass on to the host the arguments
+		2) Return errors, if any to the process
+
+
+Host Daemon:
+1) Listens for requests form VMs to open and close as above.
+	1) open(int shmid, char** baseptr, int* size, int flags, int perms)
+		1) Check if the the shmid is already open, if yes, chack and save flags and perms and return theb offset and the size.
+		2) If not already open, search for a free block, mark it as open and return
+		3) If no free block, return error.
+	
+	2) close(int shmid, char* baseptr, int size)
+		1) Reduce the ref count of the corrrespoding block.
+		2) If ref count is zero, mark it as free.
+		3) Return errors, if any.
+
+
+
+L2
+1) listen(int shmid, char** baseptr, int* size)
+	1) It informs the daemon by establishing a connection with it that it is listening the particular shmid and waits for a reply.
+	2) The daemon replies with the offset in the shared memory region and the size of the region alocated when a client attempts to connect.
+	3) We mmap the shared memory region, close the connection with the daemon and return the baseptr and the size.
+	4) Negative return value if any of the above fails (allocation from the host, ...)
+
+2) connect(string vm_id, int shmid, char** baseptr, int* size)
+	1) Establish a connection with the host requesting the host to connect to the server (vm_id, shmid).
+	2) If the server is listening, the host responds with an offset and a size
+	3) We mmap the shared memory region, close the connection with the host and return the baseptr and the size.
+	4) Negative return value if any of the above fails (allocation from the host, server not listening, ...)
+
+3) close(int shmid)
+	1) Open a connection with the host informing it of the desire to close the connection.
+	2) Wait for a reply from the host.
+	3) The host replies when the other party also calls close() if that is the case, else it returns immediately.
+
+
