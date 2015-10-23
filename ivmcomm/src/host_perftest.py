@@ -1,4 +1,4 @@
-from xmlrpc.client import ServerProxy
+import rpyc
 from time import time
 from threading import Thread
 
@@ -7,11 +7,11 @@ NUM_REQ_PER_THREAD = 10000
 
 
 def reqGen(tid):
-	s = ServerProxy('http://127.0.0.1:8888')
+	s = rpyc.connect('127.0.0.1', 8888, config={'allow_public_attrs': True})
 	start = time()
 	for i in range(0, NUM_REQ_PER_THREAD):
-		s.openShm(i % 512, tid, tid, 'w', False)
-		s.closeShm((i + 256) % 512, tid, tid)
+		s.root.openShm(i % 512, tid, tid, 'w', False)
+		s.root.closeShm((i + 256) % 512, tid, tid)
 	end = time()
 	print ('rate = ' + str(NUM_REQ_PER_THREAD / (end - start)));
 
@@ -19,5 +19,3 @@ def reqGen(tid):
 for i in range(0, NUM_THREADS):
 	t = Thread(target=reqGen, args=(i, ))
 	t.start()
-
-

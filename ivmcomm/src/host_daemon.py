@@ -1,8 +1,7 @@
 import socket
 import sys
 import configparser
-from xmlrpc.server import SimpleXMLRPCServer
-from xmlrpc.server import SimpleXMLRPCRequestHandler
+import rpyc
 import errno
 import math
 
@@ -46,72 +45,60 @@ class ShmBlockVMInfo:
 # TODO: Serialize these functions. I believe SimpleXMLRPCServer is already sequential by default
 
 # returns err_code, start_address, size in bytes
-def openShm(shmid, vm_id, pid, rw_perms, wr_exc):
-    shm_request_info = ShmBlockVMInfo(vm_id, pid, rw_perms, wr_exc)
-    # Check if already open
-    if shmid in occupied_blocks:
-        # if open, check flags and perms
-        # if read only
-        occupied_block = occupied_blocks[shmid]
-        # check if same process already opened
-        if (vm_id,pid) in occupied_block.vmproc_info_list:
-            return (errno.EACCES, -1, -1)
-        if (rw_perms == 'w'):
-            if (occupied_block.wr_exc):
+class ShmService(rpyc.Service):
+    def exposed_openShm(self, shmid, vm_id, pid, rw_perms, wr_exc):
+        shm_request_info = ShmBlockVMInfo(vm_id, pid, rw_perms, wr_exc)
+        # Check if already open
+        if shmid in occupied_blocks:
+            # if open, check flags and perms
+            # if read only
+            occupied_block = occupied_blocks[shmid]
+            # check if same process already opened
+            if (vm_id,pid) in occupied_block.vmproc_info_list:
                 return (errno.EACCES, -1, -1)
-            else:
-                occupied_block.wr_count = occupied_block.wr_count + 1
-                occupied_block.wr_exc = wr_exc
-        occupied_block.vmproc_info_list[(vm_id, pid)] = shm_request_info
-        return (0, BLOCK_SIZE * occupied_block.block_no, BLOCK_SIZE)
+            if (rw_perms == 'w'):
+                if (occupied_block.wr_exc):
+                    return (errno.EACCES, -1, -1)
+                else:
+                    occupied_block.wr_count = occupied_block.wr_count + 1
+                    occupied_block.wr_exc = wr_exc
+            occupied_block.vmproc_info_list[(vm_id, pid)] = shm_request_info
+            return (0, BLOCK_SIZE * occupied_block.block_no, BLOCK_SIZE)
 
-    # If not open, open first time
-    if (len(free_blocks) < 0):
-        return (errno.ENOSPC, -1, -1);
-    free_block = free_blocks[0]
-    del free_blocks[0]
-    occupied_blocks[shmid] = ShmBlockInfo(free_block, shm_request_info)
-    addr = BLOCK_SIZE * free_block;
-    return (0, addr, BLOCK_SIZE)
-
-
-# returns an error code
-def closeShm(shmid, vm_id, pid):
-    if shmid in occupied_blocks:
-        occupied_block = occupied_blocks[shmid]
-        # check if requester opened the shmid
-        if (vm_id, pid) in occupied_block.vmproc_info_list:
-            blockVmInfo = occupied_block.vmproc_info_list[(vm_id, pid)]
-
-            del occupied_block.vmproc_info_list[(vm_id, pid)]
-            # If the requester is a writer
-            if blockVmInfo.rw_perms == 'w':
-                occupied_block.wr_count = occupied_block.wr_count - 1
-                if occupied_block.wr_exc:
-                    occupied_block.wr_exc = False
-
-            # If ref_count == 0, delete the shared block
-            if len(occupied_block.vmproc_info_list) == 0:
-                free_blocks.append(occupied_block.block_no)
-                del occupied_blocks[shmid]
-            return 0
-
-    # If not open, return error
-    return errno.EPERM
+        # If not open, open first time
+        if (len(free_blocks) < 0):
+            return (errno.ENOSPC, -1, -1);
+        free_block = free_blocks[0]
+        del free_blocks[0]
+        occupied_blocks[shmid] = ShmBlockInfo(free_block, shm_request_info)
+        addr = BLOCK_SIZE * free_block;
+        return (0, addr, BLOCK_SIZE)
 
 
-# Restrict to a particular path.
-class RequestHandler(SimpleXMLRPCRequestHandler):
-    rpc_paths = ('/RPC2',)
+    # returns an error code
+    def exposed_closeShm(self, shmid, vm_id, pid):
+        if shmid in occupied_blocks:
+            occupied_block = occupied_blocks[shmid]
+            # check if requester opened the shmid
+            if (vm_id, pid) in occupied_block.vmproc_info_list:
+                blockVmInfo = occupied_block.vmproc_info_list[(vm_id, pid)]
 
-# Create server
-server = SimpleXMLRPCServer(("localhost", PORT),
-                            requestHandler=RequestHandler)
-server.register_introspection_functions()
+                del occupied_block.vmproc_info_list[(vm_id, pid)]
+                # If the requester is a writer
+                if blockVmInfo.rw_perms == 'w':
+                    occupied_block.wr_count = occupied_block.wr_count - 1
+                    if occupied_block.wr_exc:
+                        occupied_block.wr_exc = False
 
-# Register RPC functions
-server.register_function(openShm, "openShm")
-server.register_function(closeShm, "closeShm")
+                # If ref_count == 0, delete the shared block
+                if len(occupied_block.vmproc_info_list) == 0:
+                    free_blocks.append(occupied_block.block_no)
+                    del occupied_blocks[shmid]
+                return 0
 
-# Run the server's main loop
-server.serve_forever()
+        # If not open, return error
+        return errno.EPERM
+
+from rpyc.utils.server import ThreadedServer
+t = ThreadedServer(ShmService, port = PORT)
+t.start()
