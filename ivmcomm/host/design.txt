@@ -1,0 +1,49 @@
+This is the daemon on the host.
+
+Functions:
+1. Orchestration of memory allocation and deallocation
+2. Synchronization utils
+
+Memory allocation:
+1. Map a shm_id to a region in the shared memory
+2. Keep track of this mapping
+3. Keep track of permissions for each allocated segment
+Deallocation:
+1. Keep track of changed permissions
+2. When everyone deallocates, delete mapping
+
+Synchronization utils
+1. Give condition variable semantics
+2. Create cv using cv_id
+3. acquire cv_id: Give lock to process.
+4. release cv_id: Release lock to process.
+5. wait cv_id: wait on cv. This should release the lock for this process
+6. notify cv_id: notify on cv. This should acquire the lock and make the process proceed
+
+Close connection is used to notify end of input
+
+Protocol:
+
+alloc request:
+struct {
+  int req_type; # 1: alloc 2: dealloc 3: create 4: acq 5: rel 6: wait 7: notify 8: del
+  int id; # shared id of the mem region or the cv id
+  int uid; # unique id for requester
+  int wr_perm; # write permissions 1 = exc write 2 = write, anything else = read
+}
+
+alloc response:
+struct {
+  int size; # size in bytes
+  int offset; # offset in bytes
+  int err_no; # error code
+}
+
+dealloc response:
+struct {
+  int err_no;
+}
+
+cv_response {
+  int err_no;
+}
