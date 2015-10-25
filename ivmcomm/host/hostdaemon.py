@@ -6,8 +6,16 @@ import struct
 from collections import namedtuple
 import math
 import errno
+import configparser
 
+config = configparser.ConfigParser()
+config.read('host_daemon.conf')
 
+HOST = ''	# Symbolic name, meaning all available interfaces
+PORT = int(config['DEFAULT']['port'])
+TOT_SIZE = int(config['DEFAULT']['total_size'])
+BLOCK_SIZE = int(config['DEFAULT']['block_size'])
+SHM_PATH = config['DEFAULT']['shm_path']
 
 HOSTNAME = 'localhost'
 PORT = 8888
@@ -258,6 +266,8 @@ while inputs:
                 del message_queues[s]
                 if s in writable:
                     writable.remove(s)
+                if s in exceptional:
+                    exceptional.remove(s)
                 s.close()
 
     for s in writable:
