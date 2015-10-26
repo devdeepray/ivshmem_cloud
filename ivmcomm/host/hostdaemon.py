@@ -74,8 +74,6 @@ class ShmBlockVMInfo:
         self.uid = uid
         self.rw_perms = rw_perms
 
-# TODO: Serialize these functions. I believe SimpleXMLRPCServer is already sequential by default
-
 def process_alloc(shmid, uid, rw_perms):
     shm_request_info = ShmBlockVMInfo(uid, rw_perms)
     # Check if already open
