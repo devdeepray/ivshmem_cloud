@@ -1,5 +1,6 @@
 #include "guestlib.hh"
-#include <cerrno>
+
+int socketfd;
 
 int shm_open_conn(char* daemon_ip, char* daemon_port) {
   struct addrinfo host_info;       // The struct that getaddrinfo() fills up with data.
@@ -17,15 +18,18 @@ int shm_open_conn(char* daemon_ip, char* daemon_port) {
   // Now fill up the linked list of host_info structs with google's address information.
 
   if (getaddrinfo(daemon_ip, daemon_port, &host_info, &host_info_list)) {
-    perror("");
+    perror("SHEET");
+    fflush(stderr);
     return errno;
   }
 
   socketfd = socket(host_info_list->ai_family, host_info_list->ai_socktype, host_info_list->ai_protocol);
   if (socketfd < 0) {
-    perror("");
+    perror("SHEEET");
+    fflush(stderr);
     return errno;
   }
+  return 0;
 }
 
 int shm_close_conn() {
@@ -45,9 +49,12 @@ int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, int *offse
   else r.rw_perm = 3;
 
   int sent_bytes = 0;
+  printf("Sending\n");
+  fflush(stdout);
   while(sent_bytes < REQUEST_LEN)
     sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
-
+  printf("Recv\n");
+  fflush(stdout);
   alloc_response ars;
   recv(socketfd, (&ars), sizeof(alloc_response), 0);
 

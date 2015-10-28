@@ -1,3 +1,6 @@
+#ifndef _GUESTLIB_H_
+#define _GUESTLIB_H_
+
 #include <iostream>
 #include <cstring>      // Needed for memset
 #include <sys/socket.h> // Needed for the socket functions
@@ -25,11 +28,11 @@ struct error_response {
   int err;
 };
 
-int socketfd;
+extern int socketfd;
 
-int REQUEST_LEN = sizeof(request);
+static int REQUEST_LEN = sizeof(request);
 
-int shm_alloc(int shmid, int uid, char rw_perms, int *offset, int *size);
+int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, int *offset, int *size);
 
 int shm_dealloc(int shmid, int uid);
 
@@ -45,6 +48,8 @@ int shm_notify_cv(int id, int uid);
 
 int shm_wait_cv(int id, int uid);
 
-int shm_open_conn();
+int shm_open_conn(char* daemon_ip, char* daemon_port);
 
 int shm_close_conn();
+
+#endif // _GUESTLIB_H_
