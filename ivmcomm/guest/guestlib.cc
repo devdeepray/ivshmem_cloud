@@ -1,9 +1,9 @@
-#include "guestlib.h"
+#include "guestlib.hh"
+#include <cerrno>
 
 int shm_open_conn(char* daemon_ip, char* daemon_port) {
   struct addrinfo host_info;       // The struct that getaddrinfo() fills up with data.
   struct addrinfo *host_info_list; // Pointer to the to the linked list of host_info's.
-  int errno = 0;
 
   // The MAN page of getaddrinfo() states "All  the other fields in the structure pointed
   // to by hints must contain either 0 or a null pointer, as appropriate." When a struct
@@ -17,13 +17,13 @@ int shm_open_conn(char* daemon_ip, char* daemon_port) {
   // Now fill up the linked list of host_info structs with google's address information.
 
   if (getaddrinfo(daemon_ip, daemon_port, &host_info, &host_info_list)) {
-    perror();
+    perror("");
     return errno;
   }
 
   socketfd = socket(host_info_list->ai_family, host_info_list->ai_socktype, host_info_list->ai_protocol);
   if (socketfd < 0) {
-    perror();
+    perror("");
     return errno;
   }
 }
@@ -38,11 +38,11 @@ int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, int *offse
   r.mode = 1;
   r.id = shmid;
   r.uid = uid;
-  if (w_perms == 'w' && write_exclusive)
+  if (rw_perms == 'w' && write_exclusive)
     r.rw_perm = 1;
-  else if (w_perms == 'w')
-    r.rw_perms = 2;
-  else r.rw_perms = 3;
+  else if (rw_perms == 'w')
+    r.rw_perm = 2;
+  else r.rw_perm = 3;
 
   int sent_bytes = 0;
   while(sent_bytes < REQUEST_LEN)

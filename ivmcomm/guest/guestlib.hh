@@ -3,6 +3,7 @@
 #include <sys/socket.h> // Needed for the socket functions
 #include <netdb.h>      // Needed for the socket functions
 #include <unistd.h>
+#include <stdio.h>
 #include <errno.h>
 
 using namespace std;
@@ -27,8 +28,6 @@ struct error_response {
 int socketfd;
 
 int REQUEST_LEN = sizeof(request);
-
-typedef enum {EPERM, EACCES, ENOSPC} shm_error; // Not sure how to use these
 
 int shm_alloc(int shmid, int uid, char rw_perms, int *offset, int *size);
 
