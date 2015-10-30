@@ -102,7 +102,7 @@ int shm_create_cv(int id, int uid) {
   return ers.err;
 }
 
-int shm_delele_cv(int id, int uid) {
+int shm_delete_cv(int id, int uid) {
   request r;
   r.mode = 8;
   r.id = id;
