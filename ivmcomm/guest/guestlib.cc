@@ -1,7 +1,37 @@
-#include "guestlib.hh"
+#include <cstring>      // Needed for memset
+#include <sys/socket.h> // Needed for the socket functions
+#include <netdb.h>      // Needed for the socket functions
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
+struct request {
+  int mode;
+  int id;
+  int uid;
+  int rw_perm;
+};
+
+struct alloc_response {
+  int err;
+  int offset;
+  int size;
+};
+
+struct error_response {
+  int err;
+};
+
+// Some globals
+int REQUEST_LEN = sizeof(request);
 int socketfd;
+void* baseptr;
+int shared_dev_fd;
+int total_size;
 
+// Opens a TCP connection with the host daemon
 int shm_open_conn(char* daemon_ip, char* daemon_port) {
   struct addrinfo host_info;       // The struct that getaddrinfo() fills up with data.
   struct addrinfo *host_info_list; // Pointer to the to the linked list of host_info's.
@@ -20,30 +50,75 @@ int shm_open_conn(char* daemon_ip, char* daemon_port) {
   if (getaddrinfo(daemon_ip, daemon_port, &host_info, &host_info_list)) {
     perror("SHEET");
     fflush(stderr);
-    return errno;
+    return -1;
   }
 
   socketfd = socket(host_info_list->ai_family, host_info_list->ai_socktype, host_info_list->ai_protocol);
   if (socketfd < 0) {
     perror("SHEEET");
     fflush(stderr);
-    return errno;
+    return -1;
   }
 
   if (connect(socketfd, host_info_list->ai_addr, host_info_list->ai_addrlen)) {
     perror("SHEEET");
     fflush(stderr);
-    return errno;
+    return -1;
   }
   return 0;
 }
 
+// Inits the library
+//  Opens a conn to the host daemon
+//  mmaps the entire shared memory region
+//  makes this memory unaccessible by mprotecting it
+int shm_init(char* daemon_ip, char* daemon_port) {
+  shm_open_conn(daemon_ip, daemon_port);
+  request r;
+  r.mode = 0;
+  int sent_bytes = 0;
+  while(sent_bytes < REQUEST_LEN) {
+    sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
+  }
+
+  alloc_response ars;
+  recv(socketfd, (&ars), sizeof(alloc_response), 0);
+
+  shared_dev_fd = open("/dev/ivshmem", O_RDWR);
+  if (shared_dev_fd < 0) {
+    printf("Failed to open the ivshmem /dev node!\n");
+    return (-1);
+  } else {
+    printf("Opened the ivshmem /dev node!\n");
+  }
+
+  baseptr = mmap(0, ars.size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_dev_fd, 0);
+  if (baseptr == MAP_FAILED) {
+    printf("Failed to mmap /dev/ivshmem!\n");
+    return (-2);
+  } else {
+    printf("MMap on /dev/ivshmem successfull!\n");
+  }
+
+  if (mprotect(baseptr, ars.size, PROT_NONE)) {
+    printf("Failed to mmap /dev/ivshmem!\n");
+    return (-2);
+  } else {
+    printf("MMap on /dev/ivshmem successfull!\n");
+  }
+
+  total_size = ars.size;
+}
+
+// Closes the socket conn to the host daemon
 int shm_close_conn() {
   int errno;
   return close(socketfd);
 }
 
-int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, int *offset, int *size) {
+// Contacts the daemon for allocation
+// mprotects the allocated area for access
+int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, void** ptr, int *size) {
   request r;
   r.mode = 1;
   r.id = shmid;
@@ -55,21 +130,23 @@ int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, int *offse
   else r.rw_perm = 3;
 
   int sent_bytes = 0;
-  fflush(stdout);
   while(sent_bytes < REQUEST_LEN) {
-    fflush(stdout);
     sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
-    fflush(stdout);
   }
-  fflush(stdout);
   alloc_response ars;
   recv(socketfd, (&ars), sizeof(alloc_response), 0);
 
-  *offset = ars.offset;
+  *ptr = (void*)ars.offset;
+  if(mprotect(ptr, ars.size, PROT_READ | PROT_WRITE | PROT_EXEC)) {
+    perror("");
+    return -1;
+  }
   *size = ars.size;
   return ars.err;
 }
 
+// Contacts the daemon for deallocation
+// mprotects the deallocated area for no access
 int shm_dealloc(int shmid, int uid) {
   request r;
   r.mode = 2;
@@ -80,12 +157,18 @@ int shm_dealloc(int shmid, int uid) {
   while(sent_bytes < REQUEST_LEN)
     sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
 
-  error_response ers;
-  recv(socketfd, (&ers), sizeof(alloc_response), 0);
+  alloc_response ars;
+  recv(socketfd, (&ars), sizeof(alloc_response), 0);
 
-  return ers.err;
+  if(mprotect((void*)ars.offset, ars.size, PROT_NONE)) {
+    perror("");
+    return -1;
+  }
+
+  return ars.err;
 }
 
+// Conditional variable methods
 int shm_create_cv(int id, int uid) {
   request r;
   r.mode = 3;
@@ -180,4 +263,11 @@ int shm_wait_cv(int id, int uid) {
   recv(socketfd, (&ers), sizeof(alloc_response), 0);
 
   return ers.err;
+}
+
+// Closes daemon connection
+// munmaps the sghared memory region
+int shm_cleanup() {
+  shm_close_conn();
+  munmap(baseptr, total_size);
 }

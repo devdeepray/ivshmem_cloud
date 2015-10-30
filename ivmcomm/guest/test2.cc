@@ -6,7 +6,7 @@ int main() {
 
   printf("open");
   fflush(stdout);
-  printf("OPEN CODE: %d\n", shm_open_conn("10.0.2.3", "8889"));
+  printf("OPEN CODE: %d\n", shm_open_conn("localhost", "8889"));
   fflush(stdout);
 
   printf("create");

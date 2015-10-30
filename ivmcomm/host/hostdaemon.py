@@ -74,6 +74,9 @@ class ShmBlockVMInfo:
         self.uid = uid
         self.rw_perms = rw_perms
 
+def process_get_size():
+    return struct.pack(ALLOC_PROTO_STRUCT, 0, -1, TOT_SIZE)
+
 def process_alloc(shmid, uid, rw_perms):
     shm_request_info = ShmBlockVMInfo(uid, rw_perms)
     # Check if already open
@@ -120,10 +123,10 @@ def process_dealloc(shmid, uid):
             if len(occupied_block.vmproc_info_list) == 0:
                 free_blocks.append(occupied_block.block_no)
                 del occupied_blocks[shmid]
-            return struct.pack(RET_PROTO_STRUCT, 0)
+            return struct.pack(ALLOC_PROTO_STRUCT, 0, occupied_block.block_no * BLOCK_SIZE, BLOCK_SIZE)
 
     # If not open, return error
-    return struct.pack(RET_PROTO_STRUCT, errno.EPERM)
+    return struct.pack(ALLOC_PROTO_STRUCT, errno.EPERM, -1, -1)
 
 def process_create_cv(id, uid):
     # Check if Cv already created
@@ -174,7 +177,7 @@ def process_wait_cv(id, uid):
         tmp = acq_pending_dict[id].pop(0)
         uid_socket_dict[tmp].send(process_acq_cv(id, tmp))
 
-    return struct.pack(RET_PROTO_STRUCT, 0)
+    return b''
 
 def process_notify_cv(id, uid):
     if id not in acquired_dict or uid != acquired_dict[id]:
@@ -187,19 +190,21 @@ def process_notify_cv(id, uid):
     return struct.pack(RET_PROTO_STRUCT, 0)
 
 def process_del_cv(id, uid):
-    if id in opened_cv and uid in opened_cv[id]:
+    if id in opened_dict and uid in opened_dict[id]:
         if id in acquired_dict and acquired_dict[id]==uid:
             return struct.pack(RET_PROTO_STRUCT, errno.EPERM)
         else:
-            opened_cv[id].remove(uid)
-            if len(opened_cv[id]) == 0:
-                del opened_cv[id]
+            opened_dict[id].remove(uid)
+            if len(opened_dict[id]) == 0:
+                del opened_dict[id]
             return struct.pack(RET_PROTO_STRUCT, 0)
     return struct.pack(RET_PROTO_STRUCT, errno.EPERM)
 
 def process_request(req, sock):
     request = Request._make(struct.unpack(REQUEST_PROTO_STRUCT, req))
     uid_socket_dict[request.uid] = sock
+    if (request.req_type == 0):
+        return process_get_size()
     if (request.req_type == 1):
         return process_alloc(request.id, request.uid, request.wr_perm)
     elif (request.req_type == 2):
