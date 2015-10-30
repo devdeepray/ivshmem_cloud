@@ -29,6 +29,12 @@ int shm_open_conn(char* daemon_ip, char* daemon_port) {
     fflush(stderr);
     return errno;
   }
+
+  if (connect(socketfd, host_info_list->ai_addr, host_info_list->ai_addrlen)) {
+    perror("SHEEET");
+    fflush(stderr);
+    return errno;
+  }
   return 0;
 }
 
@@ -49,11 +55,12 @@ int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, int *offse
   else r.rw_perm = 3;
 
   int sent_bytes = 0;
-  printf("Sending\n");
   fflush(stdout);
-  while(sent_bytes < REQUEST_LEN)
+  while(sent_bytes < REQUEST_LEN) {
+    fflush(stdout);
     sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
-  printf("Recv\n");
+    fflush(stdout);
+  }
   fflush(stdout);
   alloc_response ars;
   recv(socketfd, (&ars), sizeof(alloc_response), 0);

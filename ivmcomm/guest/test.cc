@@ -2,7 +2,7 @@
 
 int main() {
   int off, size;
-  printf("OPEN CODE: %d\n", shm_open_conn("10.0.2.3", "8889"));
+  printf("OPEN CODE: %d\n", shm_open_conn("localhost", "8889"));
   fflush(stdout);
   printf("ALLOC CODE: %d\n", shm_alloc(1, 2, 'w', 1, &off, &size));
   fflush(stdout);

@@ -17,8 +17,8 @@ TOT_SIZE = int(config['DEFAULT']['total_size'])
 BLOCK_SIZE = int(config['DEFAULT']['block_size'])
 SHM_PATH = config['DEFAULT']['shm_path']
 
-HOSTNAME = 'localhost'
-PORT = 8888
+HOSTNAME = ''
+PORT = 8889
 
 REQUEST_PROTO_STRUCT = 'iiii'
 REQUEST_PROTO_SIZE = struct.calcsize(REQUEST_PROTO_STRUCT)

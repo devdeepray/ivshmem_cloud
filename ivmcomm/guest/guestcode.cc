@@ -37,7 +37,7 @@ int main()
   host_info.ai_socktype = SOCK_STREAM; // Use SOCK_STREAM for TCP or SOCK_DGRAM for UDP.
 
   // Now fill up the linked list of host_info structs with google's address information.
-  status = getaddrinfo("10.0.2.3", "8889", &host_info, &host_info_list);
+  status = getaddrinfo("localhost", "8889", &host_info, &host_info_list);
   // getaddrinfo returns 0 on succes, or some other value when an error occured.
   // (translated into human readable text by the gai_gai_strerror function).
   if (status != 0)  std::cout << "getaddrinfo error" << gai_strerror(status) ;
@@ -46,7 +46,7 @@ int main()
   std::cout << "Creating a socket..."  << std::endl;
   int socketfd ; // The socket descripter
   socketfd = socket(host_info_list->ai_family, host_info_list->ai_socktype,
-  host_info_list->ai_protocol);
+	  host_info_list->ai_protocol);
   if (socketfd == -1)  std::cout << "socket error " ;
   status = connect(socketfd, host_info_list->ai_addr, host_info_list->ai_addrlen);
   if (status == -1)  std::cout << "connect error" ;
@@ -68,7 +68,7 @@ int main()
   };
   nts nt;
   len = sizeof(request);
-  for (int i = 0; i < 100000; ++i) {
+  for (int i = 0; i < 100; ++i) {
     //socketfd = socket(host_info_list->ai_family, host_info_list->ai_socktype,
     //  host_info_list->ai_protocol);
     //status = connect(socketfd, host_info_list->ai_addr, host_info_list->ai_addrlen);
