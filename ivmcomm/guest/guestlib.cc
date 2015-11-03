@@ -27,9 +27,33 @@ struct error_response {
 // Some globals
 int REQUEST_LEN = sizeof(request);
 int socketfd;
-void* baseptr;
+char* baseptr;
 int shared_dev_fd;
 int total_size;
+
+int recv_full(char* buf, int recv_size) {
+  int recv_bytes = 0;
+  while (recv_bytes < recv_size) {
+    int ret = recv(socketfd, buf + recv_bytes, sizeof(alloc_response), 0);
+    if (ret < 0) {
+      return ret;
+    }
+    recv_bytes += ret;
+  }
+  return 0;
+}
+
+int send_full(char* buf, int send_size) {
+  int sent_bytes = 0;
+  while (sent_bytes < send_size) {
+    int ret = send(socketfd, buf + sent_bytes, REQUEST_LEN, 0);
+    if (ret < 0) {
+      return ret;
+    }
+    sent_bytes += ret;
+  }
+  return 0;
+}
 
 // Opens a TCP connection with the host daemon
 int shm_open_conn(char* daemon_ip, char* daemon_port) {
@@ -48,21 +72,15 @@ int shm_open_conn(char* daemon_ip, char* daemon_port) {
   // Now fill up the linked list of host_info structs with google's address information.
 
   if (getaddrinfo(daemon_ip, daemon_port, &host_info, &host_info_list)) {
-    perror("SHEET");
-    fflush(stderr);
     return -1;
   }
 
   socketfd = socket(host_info_list->ai_family, host_info_list->ai_socktype, host_info_list->ai_protocol);
   if (socketfd < 0) {
-    perror("SHEEET");
-    fflush(stderr);
     return -1;
   }
 
   if (connect(socketfd, host_info_list->ai_addr, host_info_list->ai_addrlen)) {
-    perror("SHEEET");
-    fflush(stderr);
     return -1;
   }
   return 0;
@@ -73,76 +91,98 @@ int shm_open_conn(char* daemon_ip, char* daemon_port) {
 //  mmaps the entire shared memory region
 //  makes this memory unaccessible by mprotecting it
 int shm_init(char* daemon_ip, char* daemon_port) {
-  shm_open_conn(daemon_ip, daemon_port);
+
+  int ret = shm_open_conn(daemon_ip, daemon_port);
+  if (ret) {
+    return ret;
+  }
+
   request r;
   r.mode = 0;
-  int sent_bytes = 0;
-  while(sent_bytes < REQUEST_LEN) {
-    sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
+  ret = send_full((char*) &r, sizeof(r));
+  if (ret) {
+    return ret;
   }
 
   alloc_response ars;
-  recv(socketfd, (&ars), sizeof(alloc_response), 0);
-
-  shared_dev_fd = open("/dev/ivshmem", O_RDWR);
-  if (shared_dev_fd < 0) {
-    printf("Failed to open the ivshmem /dev node!\n");
-    return (-1);
-  } else {
-    printf("Opened the ivshmem /dev node!\n");
+  ret = recv_full((char*) &ars, sizeof(ars));
+  if (ars.err || ret) {
+    return ars.err | ret;
   }
 
-  baseptr = mmap(0, ars.size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_dev_fd, 0);
+  shared_dev_fd = open("/tmp/myf", O_RDWR);
+  if (shared_dev_fd < 0) {
+    printf("Failed to open the ivshmem /dev node!\n");
+    return -1;
+  }
+
+  baseptr = (char*) mmap(0, ars.size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_dev_fd, 0);
   if (baseptr == MAP_FAILED) {
     printf("Failed to mmap /dev/ivshmem!\n");
-    return (-2);
-  } else {
-    printf("MMap on /dev/ivshmem successfull!\n");
+    close(shared_dev_fd);
+    return -2;
   }
 
   if (mprotect(baseptr, ars.size, PROT_NONE)) {
-    printf("Failed to mmap /dev/ivshmem!\n");
-    return (-2);
-  } else {
-    printf("MMap on /dev/ivshmem successfull!\n");
+    printf("Failed to protect /dev/ivshmem!\n");
+    munmap(baseptr, ars.size);
+    close(shared_dev_fd);
+    return -2;
   }
 
   total_size = ars.size;
+  return 0;
 }
 
 // Closes the socket conn to the host daemon
 int shm_close_conn() {
-  int errno;
   return close(socketfd);
 }
 
 // Contacts the daemon for allocation
 // mprotects the allocated area for access
 int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, void** ptr, int *size) {
-  request r;
-  r.mode = 1;
-  r.id = shmid;
-  r.uid = uid;
-  if (rw_perms == 'w' && write_exclusive)
-    r.rw_perm = 1;
-  else if (rw_perms == 'w')
-    r.rw_perm = 2;
-  else r.rw_perm = 3;
+  {
+    request r;
+    r.mode = 1;
+    r.id = shmid;
+    r.uid = uid;
 
-  int sent_bytes = 0;
-  while(sent_bytes < REQUEST_LEN) {
-    sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
+    if (rw_perms == 'w' && write_exclusive) {
+      r.rw_perm = 1;
+    } else if (rw_perms == 'w') {
+      r.rw_perm = 2;
+    } else {
+      r.rw_perm = 3;
+    }
+
+    int ret = send_full((char*) &r, sizeof(r));
+    if (ret) {
+      return ret;
+    }
   }
-  alloc_response ars;
-  recv(socketfd, (&ars), sizeof(alloc_response), 0);
 
-  *ptr = (void*)ars.offset;
-  if(mprotect(ptr, ars.size, PROT_READ | PROT_WRITE | PROT_EXEC)) {
+  alloc_response ars;
+
+  {
+    int ret = recv_full((char*) &ars, sizeof(ars));
+    if (ret) {
+      return ret;
+    }
+  }
+  if (ars.err) {
+    return ars.err;
+  }
+
+  *ptr = (void*) (baseptr + ars.offset);
+
+  if (mprotect(ptr, ars.size, PROT_READ | (rw_perms == 'w' ? PROT_WRITE : 0x0))) {
     perror("");
     return -1;
   }
+
   *size = ars.size;
-  return ars.err;
+  return 0;
 }
 
 // Contacts the daemon for deallocation
@@ -153,19 +193,27 @@ int shm_dealloc(int shmid, int uid) {
   r.id = shmid;
   r.uid = uid;
 
-  int sent_bytes = 0;
-  while(sent_bytes < REQUEST_LEN)
-    sent_bytes += send(socketfd, (&r), REQUEST_LEN, 0);
+  int ret = send_full((char*) &r, sizeof(r));
+
+  if (ret) {
+    return ret;
+  }
 
   alloc_response ars;
-  recv(socketfd, (&ars), sizeof(alloc_response), 0);
 
-  if(mprotect((void*)ars.offset, ars.size, PROT_NONE)) {
+  ret = recv_full((char*) &ars, sizeof(ars));
+
+  if (ret || ars.err) {
+    return ret | ars.err;
+  }
+
+  char* ptr = baseptr + ars.offset;
+  if(mprotect(ptr, ars.size, PROT_NONE)) {
     perror("");
     return -1;
   }
 
-  return ars.err;
+  return 0;
 }
 
 // Conditional variable methods
