@@ -36,6 +36,7 @@ int recv_full(char* buf, int recv_size) {
   while (recv_bytes < recv_size) {
     int ret = recv(socketfd, buf + recv_bytes, sizeof(alloc_response), 0);
     if (ret < 0) {
+      printf("Recv error\n");
       return ret;
     }
     recv_bytes += ret;
@@ -48,6 +49,7 @@ int send_full(char* buf, int send_size) {
   while (sent_bytes < send_size) {
     int ret = send(socketfd, buf + sent_bytes, REQUEST_LEN, 0);
     if (ret < 0) {
+      printf("Sending error\n");
       return ret;
     }
     sent_bytes += ret;
@@ -123,12 +125,12 @@ int shm_init(char* daemon_ip, char* daemon_port) {
     return -2;
   }
 
-  if (mprotect(baseptr, ars.size, PROT_NONE)) {
-    printf("Failed to protect /dev/ivshmem!\n");
-    munmap(baseptr, ars.size);
-    close(shared_dev_fd);
-    return -2;
-  }
+  // if (mprotect(baseptr, ars.size, PROT_NONE)) {
+  //   printf("Failed to protect /dev/ivshmem!\n");
+  //   munmap(baseptr, ars.size);
+  //   close(shared_dev_fd);
+  //   return -2;
+  // }
 
   total_size = ars.size;
   return 0;
@@ -171,15 +173,22 @@ int shm_alloc(int shmid, int uid, char rw_perms, int write_exclusive, void** ptr
     }
   }
   if (ars.err) {
+    printf("Daemon error\n");
     return ars.err;
   }
 
   *ptr = (void*) (baseptr + ars.offset);
 
-  if (mprotect(ptr, ars.size, PROT_READ | (rw_perms == 'w' ? PROT_WRITE : 0x0))) {
-    perror("");
-    return -1;
-  }
+  printf("SIZE:%d\n", ars.size);
+  printf("%p\n", baseptr);
+  printf("%p\n", *ptr);
+  printf("%d\n", ars.offset);
+
+  // if (mprotect(*ptr, ars.size, PROT_READ | (rw_perms == 'w' ? PROT_WRITE : 0x0))) {
+  //   printf("mprotect error\n");
+  //   perror("");
+  //   return -1;
+  // }
 
   *size = ars.size;
   return 0;
@@ -208,10 +217,10 @@ int shm_dealloc(int shmid, int uid) {
   }
 
   char* ptr = baseptr + ars.offset;
-  if(mprotect(ptr, ars.size, PROT_NONE)) {
-    perror("");
-    return -1;
-  }
+  // if(mprotect(ptr, ars.size, PROT_NONE)) {
+  //   perror("");
+  //   return -1;
+  // }
 
   return 0;
 }

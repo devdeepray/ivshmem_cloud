@@ -32,8 +32,8 @@ RET_PROTO_STRUCT = 'i'
 RET_PROTO_SIZE = struct.calcsize(RET_PROTO_STRUCT)
 Ret = namedtuple('Ret', 'errno')
 
-TOT_SIZE = 512
-BLOCK_SIZE = 1
+TOT_SIZE = 128 * 1048576
+BLOCK_SIZE = 1048576
 SHM_PATH = 'dummy'
 
 # Initialise th server data structures
