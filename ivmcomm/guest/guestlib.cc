@@ -112,7 +112,7 @@ int shm_init(char* daemon_ip, char* daemon_port) {
     return ars.err | ret;
   }
 
-  shared_dev_fd = open("/tmp/myf", O_RDWR);
+  shared_dev_fd = open("/dev/shm/ivshmem", O_RDWR);
   if (shared_dev_fd < 0) {
     printf("Failed to open the ivshmem /dev node!\n");
     return -1;

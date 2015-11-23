@@ -11,7 +11,7 @@ char* port = "8888";
 int shmid = 1234;
 int uid = 1;
 int cvid = 123;
-int to_transfer = 10000;
+int to_transfer = 20000;
 
 int main() {
   int ret = shm_init(ip, port);

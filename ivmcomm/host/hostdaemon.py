@@ -17,9 +17,6 @@ TOT_SIZE = int(config['DEFAULT']['total_size'])
 BLOCK_SIZE = int(config['DEFAULT']['block_size'])
 SHM_PATH = config['DEFAULT']['shm_path']
 
-HOSTNAME = ''
-PORT = 8888
-
 REQUEST_PROTO_STRUCT = 'iiii'
 REQUEST_PROTO_SIZE = struct.calcsize(REQUEST_PROTO_STRUCT)
 Request = namedtuple('Request', 'req_type id uid wr_perm')
@@ -227,8 +224,8 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setblocking(0)
 
 # Bind to port
-server_address = (HOSTNAME, PORT)
-print('Starting server on ' + HOSTNAME + ':' + str(PORT))
+server_address = (HOST, PORT)
+print('Starting server on ' + HOST + ':' + str(PORT))
 server.bind(server_address)
 
 # Start listening for connections
